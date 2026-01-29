@@ -1,0 +1,79 @@
+name: Замена текста (с 7 строки)
+
+on:
+  workflow_dispatch:
+    inputs:
+      my_text:
+        description: 'Вставь новый текст сюда'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  replace-job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Скачиваем репозиторий (виртуально)
+        uses: actions/checkout@v3
+
+      - name: Запускаем Python скрипт
+        env:
+          NEW_TEXT: ${{ inputs.my_text }}
+        run: |
+          python -c "
+          import os
+          import sys
+
+          # Текст берем из окна ввода
+          text_to_insert = os.environ['NEW_TEXT']
+          # Если нужны переносы строк, можно заменить символы (опционально)
+          # text_to_insert = text_to_insert.replace('\\n', '\n') 
+
+          start_line = 7
+          extensions = ['.txt', '.md', '.html', '.css', '.js', '.py']
+          skip_files = ['manual_replace.yml']
+
+          count = 0
+          for root, dirs, files in os.walk('.'):
+              if '.git' in dirs: dirs.remove('.git')
+              
+              for file in files:
+                  if file in skip_files: continue
+                  if not any(file.endswith(ext) for ext in extensions): continue
+
+                  path = os.path.join(root, file)
+                  try:
+                      with open(path, 'r', encoding='utf-8') as f:
+                          lines = f.readlines()
+                      
+                      # Оставляем первые 6 строк
+                      kept = lines[:start_line-1]
+                      
+                      # Добавляем перенос, если надо
+                      if kept and not kept[-1].endswith('\n'):
+                          kept[-1] += '\n'
+                      
+                      # Добавляем текст из формы
+                      kept.append(text_to_insert + '\n')
+
+                      with open(path, 'w', encoding='utf-8') as f:
+                          f.writelines(kept)
+                      
+                      print(f'Обновлен: {path}')
+                      count += 1
+                  except Exception as e:
+                      print(f'Ошибка {path}: {e}')
+          
+          if count == 0:
+              print('Файлы не найдены или не изменены')
+          "
+
+      - name: Сохраняем изменения (Commit & Push)
+        run: |
+          git config --global user.name "Auto Bot"
+          git config --global user.email "bot@noreply.github.com"
+          git add .
+          git commit -m "Автоматическая замена текста с 7 строки" || exit 0
+          git push
