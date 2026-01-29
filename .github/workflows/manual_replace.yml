@@ -1,47 +1,54 @@
-name: Замена текста (с 7 строки)
+name: Auto Update Configs
 
+# Скрипт сработает сам, когда ты изменишь файл SOURCE.txt
 on:
+  push:
+    paths:
+      - 'SOURCE.txt'
   workflow_dispatch:
-    inputs:
-      my_text:
-        description: 'Вставь новый текст сюда'
-        required: true
-        type: string
 
 permissions:
   contents: write
 
 jobs:
-  replace-job:
+  update-files:
     runs-on: ubuntu-latest
     steps:
-      - name: Скачиваем репозиторий (виртуально)
+      - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Запускаем Python скрипт
-        env:
-          NEW_TEXT: ${{ inputs.my_text }}
+      - name: Run Python Replace Script
         run: |
           python -c "
           import os
-          import sys
 
-          # Текст берем из окна ввода
-          text_to_insert = os.environ['NEW_TEXT']
-          # Если нужны переносы строк, можно заменить символы (опционально)
-          # text_to_insert = text_to_insert.replace('\\n', '\n') 
+          # ИМЯ ФАЙЛА, ОТКУДА БРАТЬ НОВЫЙ ТЕКСТ
+          SOURCE_FILE = 'SOURCE.txt'
+          START_LINE = 7
+          # КАКИЕ ФАЙЛЫ ОБНОВЛЯТЬ (можно добавить свои расширения)
+          EXTENSIONS = ['.txt', '.md', '.html', '.conf']
+          
+          # Файлы, которые нельзя трогать
+          SKIP_FILES = ['auto_update.yml', SOURCE_FILE, 'README.md']
 
-          start_line = 7
-          extensions = ['.txt', '.md', '.html', '.css', '.js', '.py']
-          skip_files = ['manual_replace.yml']
+          if not os.path.exists(SOURCE_FILE):
+              print(f'Файл {SOURCE_FILE} не найден! Создайте его.')
+              exit(1)
 
+          # Читаем твои VLESS конфиги
+          with open(SOURCE_FILE, 'r', encoding='utf-8') as f:
+              new_text_content = f.read()
+
+          print('Начинаю обновление...')
           count = 0
+
           for root, dirs, files in os.walk('.'):
               if '.git' in dirs: dirs.remove('.git')
-              
+              if '.github' in dirs: dirs.remove('.github')
+
               for file in files:
-                  if file in skip_files: continue
-                  if not any(file.endswith(ext) for ext in extensions): continue
+                  if file in SKIP_FILES: continue
+                  if not any(file.endswith(ext) for ext in EXTENSIONS): continue
 
                   path = os.path.join(root, file)
                   try:
@@ -49,31 +56,34 @@ jobs:
                           lines = f.readlines()
                       
                       # Оставляем первые 6 строк
-                      kept = lines[:start_line-1]
-                      
-                      # Добавляем перенос, если надо
-                      if kept and not kept[-1].endswith('\n'):
-                          kept[-1] += '\n'
-                      
-                      # Добавляем текст из формы
-                      kept.append(text_to_insert + '\n')
+                      kept_lines = lines[:START_LINE-1]
 
-                      with open(path, 'w', encoding='utf-8') as f:
-                          f.writelines(kept)
+                      # Если последняя строка без переноса, добавляем его
+                      if kept_lines and not kept_lines[-1].endswith('\n'):
+                          kept_lines[-1] += '\n'
                       
-                      print(f'Обновлен: {path}')
+                      # Если после 6 строк пусто, добавляем разделитель (опционально)
+                      if not kept_lines:
+                          kept_lines.append('\n')
+
+                      # Добавляем конфиги
+                      final_content = ''.join(kept_lines) + new_text_content
+                      
+                      with open(path, 'w', encoding='utf-8') as f:
+                          f.write(final_content)
+                          
                       count += 1
                   except Exception as e:
                       print(f'Ошибка {path}: {e}')
-          
-          if count == 0:
-              print('Файлы не найдены или не изменены')
+
+          print(f'Готово! Обновлено файлов: {count}')
           "
 
-      - name: Сохраняем изменения (Commit & Push)
+      - name: Commit changes
         run: |
-          git config --global user.name "Auto Bot"
+          git config --global user.name "Config Bot"
           git config --global user.email "bot@noreply.github.com"
           git add .
-          git commit -m "Автоматическая замена текста с 7 строки" || exit 0
+          # Если изменений нет, не вылетать с ошибкой
+          git commit -m "Auto-update configs from SOURCE.txt" || exit 0
           git push
