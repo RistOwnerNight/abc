@@ -1,0 +1,103 @@
+name: Update VPN Configs
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.01
+
+      - name: Setup Python
+        uses: actions/setup-python@v6.2
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run Script
+        shell: python
+        run: |
+          import os
+          import base64
+          import requests
+
+          MY_HWID = "467c01e84d78a648"
+          SUB_URL = "https://internet.matryoshkanet.ru/DeJBemnt1sNQ_kKS"
+          START_LINE = 7
+          SKIP_FILES = {'README.md', 'LICENSE', 'requirements.txt', 'CNAME'}
+          SKIP_EXTS = {'.yml', '.yaml', '.png', '.jpg', '.git', '.py', '.sh', '.exe'}
+
+          def decode_base64_content(text: str) -> str:
+              text = text.strip()
+              if text.startswith(("vless://", "ss://", "trojan://")):
+                  return text
+              try:
+                  if len(text) % 4:
+                      text += '=' * (4 - len(text) % 4)
+                  return base64.b64decode(text).decode('utf-8')
+              except:
+                  return text
+
+          def fetch_sub() -> str:
+              headers = {"User-Agent": f"Happ/3.7.1 ({MY_HWID})", "X-HWID": MY_HWID}
+              params = {"hwid": MY_HWID, "device_id": MY_HWID, "flag": "v2ray"}
+              
+              resp = requests.get(SUB_URL, headers=headers, params=params, timeout=30)
+              resp.raise_for_status()
+              
+              if not resp.content:
+                  return ""
+              
+              return decode_base64_content(resp.content.decode('utf-8'))
+
+          def main():
+              try:
+                  new_configs = fetch_sub()
+                  if not new_configs or not new_configs.strip():
+                      return
+
+                  for root, dirs, files in os.walk('.'):
+                      dirs[:] = [d for d in dirs if d not in {'.git', '.github'}]
+                      for file in files:
+                          if file in SKIP_FILES or any(file.endswith(ext) for ext in SKIP_EXTS):
+                              continue
+                          
+                          full_path = os.path.join(root, file)
+                          try:
+                              with open(full_path, 'r', encoding='utf-8') as f:
+                                  lines = f.readlines()
+                              
+                              if len(lines) < START_LINE:
+                                  continue
+                              
+                              new_content = ''.join(lines[:START_LINE - 1]) + new_configs
+                              if not new_configs.endswith('\n'):
+                                  new_content += '\n'
+                              
+                              if ''.join(lines) != new_content:
+                                  with open(full_path, 'w', encoding='utf-8') as f:
+                                      f.write(new_content)
+                          except:
+                              pass
+              except:
+                  pass
+
+          if __name__ == "__main__":
+              main()
+
+      - name: Push changes
+        run: |
+          git config --global user.name "actions-user"
+          git config --global user.email "actions@github.com"
+          git add .
+          git commit -m "update" || exit 0
+          git push
