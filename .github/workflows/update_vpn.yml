@@ -50,13 +50,21 @@ jobs:
           def fetch_sub() -> str:
               headers = {"User-Agent": "Happ/3.9.1", "X-HWID": MY_HWID}
               
-              resp = requests.get(SUB_URL, headers=headers, timeout=30)
-              resp.raise_for_status()
-              
-              if not resp.content:
+              try:
+                  resp = requests.get(SUB_URL, headers=headers, timeout=30)
+                  resp.raise_for_status()
+                  
+                  if not resp.content:
+                      return ""
+                  
+                  full_config = decode_base64_content(resp.content.decode('utf-8'))
+                  
+                  config_lines = full_config.strip().splitlines()
+                  if len(config_lines) > 1:
+                      return '\n'.join(config_lines[1:])
                   return ""
-              
-              return decode_base64_content(resp.content.decode('utf-8'))
+              except:
+                  return ""
 
           def main():
               try:
@@ -78,14 +86,24 @@ jobs:
                               if len(lines) < START_LINE:
                                   continue
                               
-                              new_content = ''.join(lines[:START_LINE - 1]) + new_configs
-                              if not new_configs.endswith('\n'):
-                                  new_content += '\n'
+                              target_index = START_LINE - 1
+                              current_first_config = lines[target_index].strip()
                               
-                              if ''.join(lines) != new_content:
+                              if not current_first_config.startswith("ss"):
+                                  # If it doesn't start with ss (e.g. vless), do NOT touch the file
+                                  continue
+                              
+                              head = lines[:target_index]
+                              tail = lines[target_index + 1:] # Skip only the target line
+                              
+                              new_content_str = ''.join(head) + new_configs + '\n' + ''.join(tail)
+                              
+                              # Write only if changed
+                              if ''.join(lines) != new_content_str:
                                   with open(full_path, 'w', encoding='utf-8') as f:
-                                      f.write(new_content)
-                          except:
+                                      f.write(new_content_str)
+                          except Exception as e:
+                              print(f"Error processing {file}: {e}")
                               pass
               except:
                   pass
