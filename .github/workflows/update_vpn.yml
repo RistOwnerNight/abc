@@ -49,22 +49,24 @@ jobs:
 
           def fetch_sub() -> str:
               headers = {"User-Agent": "Happ/3.9.1", "X-HWID": MY_HWID}
-              try:
-                  resp = requests.get(SUB_URL, headers=headers, timeout=30)
-                  resp.raise_for_status()
-                  if not resp.content:
-                      return ""
-                  full_config = decode_base64_content(resp.content.decode('utf-8'))
-                  config_lines = full_config.strip().splitlines()
-                  if len(config_lines) > 1:
-                      return '\n'.join(config_lines[1:])
+              
+              resp = requests.get(SUB_URL, headers=headers, timeout=30)
+              resp.raise_for_status()
+              
+              if not resp.content:
                   return ""
-              except:
+              
+              return decode_base64_content(resp.content.decode('utf-8'))
+
+          def remove_first_config(config_text: str) -> str:
+              lines = [line for line in config_text.splitlines() if line.strip()]
+              if len(lines) <= 1:
                   return ""
+              return '\n'.join(lines[1:])
 
           def main():
               try:
-                  new_configs = fetch_sub()
+                  new_configs = remove_first_config(fetch_sub())
                   if not new_configs or not new_configs.strip():
                       return
 
@@ -82,15 +84,13 @@ jobs:
                               if len(lines) < START_LINE:
                                   continue
                               
-                              target_index = START_LINE - 1
-                              if not lines[target_index].strip().startswith("ss"):
-                                  continue
+                              new_content = ''.join(lines[:START_LINE - 1]) + new_configs
+                              if not new_configs.endswith('\n'):
+                                  new_content += '\n'
                               
-                              head = lines[:target_index]
-                              new_content = ''.join(head) + new_configs + '\n'
-                              
-                              with open(full_path, 'w', encoding='utf-8') as f:
-                                  f.write(new_content)
+                              if ''.join(lines) != new_content:
+                                  with open(full_path, 'w', encoding='utf-8') as f:
+                                      f.write(new_content)
                           except:
                               pass
               except:
