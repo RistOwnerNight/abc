@@ -31,7 +31,7 @@ jobs:
           import requests
 
           MY_HWID = "467c01e84d78a648"
-          SUB_URL = "https://internet.matryoshkanet.ru/DeJBemnt1sNQ_kKS"
+          SUB_URL = "https://main.aliusvpn.ru/sub/7shtRrZXFGP2ZQ1T"
           START_LINE = 7
           SKIP_FILES = {'README.md', 'LICENSE', 'requirements.txt', 'CNAME'}
           SKIP_EXTS = {'.yml', '.yaml', '.png', '.jpg', '.git', '.py', '.sh', '.exe'}
