@@ -2,7 +2,7 @@ name: Update VPN Configs
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: "0 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -18,23 +18,24 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6.2.0
         with:
-          python-version: '3.13'
+          python-version: "3.13"
 
       - name: Install dependencies
         run: pip install requests
 
       - name: Run Script
         shell: python
+        env:
+          MY_HWID: "467c01e84d78a648"
+          SUB_URL: "https://main.aliusvpn.ru/sub/7shtRrZXFGP2ZQ1T"
         run: |
           import os
           import base64
           import requests
 
-          MY_HWID = "467c01e84d78a648"
-          SUB_URL = "https://main.aliusvpn.ru/sub/7shtRrZXFGP2ZQ1T"
-          START_LINE = 7
           SKIP_FILES = {'README.md', 'LICENSE', 'requirements.txt', 'CNAME'}
-          SKIP_EXTS = {'.yml', '.yaml', '.png', '.jpg', '.git', '.py', '.sh', '.exe'}
+          SKIP_EXTS = {'.yml', '.yaml', '.png', '.jpg', '.git', '.py', '.sh', '.exe', '.md'}
+          STATUS_PREFIX = "#subscription-status:"
 
           def decode_base64_content(text: str) -> str:
               text = text.strip()
@@ -44,18 +45,15 @@ jobs:
                   if len(text) % 4:
                       text += '=' * (4 - len(text) % 4)
                   return base64.b64decode(text).decode('utf-8')
-              except:
+              except Exception:
                   return text
 
           def fetch_sub() -> str:
-              headers = {"User-Agent": "Happ/3.9.1", "X-HWID": MY_HWID}
-              
-              resp = requests.get(SUB_URL, headers=headers, timeout=30)
+              headers = {"User-Agent": "Happ/3.9.1", "X-HWID": os.environ["MY_HWID"]}
+              resp = requests.get(os.environ["SUB_URL"], headers=headers, timeout=30)
               resp.raise_for_status()
-              
               if not resp.content:
                   return ""
-              
               return decode_base64_content(resp.content.decode('utf-8'))
 
           def remove_first_config(config_text: str) -> str:
@@ -64,10 +62,31 @@ jobs:
                   return ""
               return '\n'.join(lines[1:])
 
+          def split_header_body(lines: list[str]) -> tuple[list[str], list[str]]:
+              if not lines:
+                  return [], []
+              first_config_idx = len(lines)
+              for i, line in enumerate(lines):
+                  stripped = line.strip()
+                  if not stripped:
+                      continue
+                  if stripped.startswith("#"):
+                      continue
+                  first_config_idx = i
+                  break
+              return lines[:first_config_idx], lines[first_config_idx:]
+
+          def parse_status(header_lines: list[str]) -> str:
+              for line in header_lines:
+                  stripped = line.strip()
+                  if stripped.lower().startswith(STATUS_PREFIX):
+                      return stripped.split(":", 1)[1].strip().lower()
+              return "active"
+
           def main():
               try:
                   new_configs = remove_first_config(fetch_sub())
-                  if not new_configs or not new_configs.strip():
+                  if not new_configs.strip():
                       return
 
                   for root, dirs, files in os.walk('.'):
@@ -75,25 +94,27 @@ jobs:
                       for file in files:
                           if file in SKIP_FILES or any(file.endswith(ext) for ext in SKIP_EXTS):
                               continue
-                          
+
                           full_path = os.path.join(root, file)
                           try:
                               with open(full_path, 'r', encoding='utf-8') as f:
-                                  lines = f.readlines()
-                              
-                              if len(lines) < START_LINE:
+                                  original = f.read()
+                              lines = original.splitlines()
+                              header, _ = split_header_body(lines)
+                              if not header:
                                   continue
-                              
-                              new_content = ''.join(lines[:START_LINE - 1]) + new_configs
-                              if not new_configs.endswith('\n'):
-                                  new_content += '\n'
-                              
-                              if ''.join(lines) != new_content:
+
+                              status = parse_status(header)
+                              if status == "expired":
+                                  continue
+
+                              new_content = '\n'.join(header).rstrip('\n') + '\n' + new_configs.rstrip('\n') + '\n'
+                              if original != new_content:
                                   with open(full_path, 'w', encoding='utf-8') as f:
                                       f.write(new_content)
-                          except:
+                          except Exception:
                               pass
-              except:
+              except Exception:
                   pass
 
           if __name__ == "__main__":
