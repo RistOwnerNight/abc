@@ -120,7 +120,7 @@ jobs:
                                   continue
 
                               status = parse_status(header)
-                              if status == "expired":
+                              if status != "active":
                                   continue
 
                               new_content = '\n'.join(header).rstrip('\n') + '\n' + new_configs.rstrip('\n') + '\n'
