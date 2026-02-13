@@ -1,6 +1,16 @@
 name: Update VPN Configs
 
 on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - ".github/workflows/**"
+      - "README.md"
+      - "LICENSE"
+      - "requirements.txt"
+      - "CNAME"
+      - "**/*.md"
   schedule:
     - cron: "0 * * * *"
   workflow_dispatch:
@@ -8,8 +18,13 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: update-vpn-configs
+  cancel-in-progress: true
+
 jobs:
   update:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
