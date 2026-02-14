@@ -37,7 +37,7 @@ jobs:
         shell: python
         env:
           MY_HWID: "467c01e84d78a648"
-          SUB_URL: "https://main.aliusvpn.ru/sub/7shtRrZXFGP2ZQ1T"
+          SUB_URL: "https://mobile.furkvpn.com/vzy_4jkfmUYw8EoW"
         run: |
           import os
           import base64
