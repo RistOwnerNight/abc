@@ -1,0 +1,65 @@
+name: Add Subscription Status
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  add-marker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+      
+      - name: Add marker to all files
+        shell: python
+        run: |
+          import os
+          
+          def main():
+              files_updated = 0
+              
+              for root, dirs, files in os.walk('.'):
+                  # Skip .git and .github directories
+                  dirs[:] = [d for d in dirs if d not in {'.git', '.github'}]
+                  
+                  for file in files:
+                      try:
+                          path = os.path.join(root, file)
+                          
+                          # Skip binary and special files
+                          if file.endswith(('.png', '.jpg', '.jpeg', '.gif', '.pdf', '.zip')):
+                              continue
+                          
+                          with open(path, 'r', encoding='utf-8') as f:
+                              content = f.read()
+                          
+                          # Check if marker already exists
+                          if '#subscription-status: active' in content.lower():
+                              print(f"⊘ Skipped (already has marker): {path}")
+                              continue
+                          
+                          # Add marker at the beginning
+                          new_content = '#subscription-status: active\n' + content
+                          
+                          with open(path, 'w', encoding='utf-8') as f:
+                              f.write(new_content)
+                          
+                          files_updated += 1
+                          print(f"✓ Added marker to: {path}")
+                          
+                      except Exception as e:
+                          print(f"× Error processing {path}: {e}")
+              
+              print(f"\n{'='*50}")
+              print(f"Total files updated: {files_updated}")
+          
+          if __name__ == "__main__":
+              main()
+      
+      - name: Push changes
+        run: |
+          git config --global user.name "actions-user"
+          git config --global user.email "actions@github.com"
+          git add .
+          git commit -m "Add subscription-status marker to all files" || exit 0
+          git push
