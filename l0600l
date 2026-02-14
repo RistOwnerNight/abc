@@ -1,0 +1,8 @@
+#profile-update-interval: 1
+#profile-title: OK Vpn
+#support-url: https://t.me/FlexVerified
+#profile-web-page-url: https://t.me/FlexVerified
+#announce: ↖️ Обход глушилок ВСЕХ операторов всего за 350₽/мес ↗️ | ID: 8366046868
+#device-limit: 3
+#subscription-status: active
+vless://5e529c8c-5c38-4d96-89ca-ec5d194ad004@example.com:8443?security=reality&type=tcp&flow=xtls-rprx-vision&sni=example.com&fp=random&pbk=REPLACE_ME&sid=REPLACE_ME#Main
