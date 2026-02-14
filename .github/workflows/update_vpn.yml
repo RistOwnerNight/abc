@@ -6,11 +6,6 @@ on:
       - main
     paths-ignore:
       - ".github/workflows/**"
-      - "README.md"
-      - "LICENSE"
-      - "requirements.txt"
-      - "CNAME"
-      - "**/*.md"
   schedule:
     - cron: "0 * * * *"
   workflow_dispatch:
@@ -28,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
 
       - name: Setup Python
         uses: actions/setup-python@v6.2.0
@@ -48,89 +43,49 @@ jobs:
           import base64
           import requests
 
-          SKIP_FILES = {'README.md', 'LICENSE', 'requirements.txt', 'CNAME'}
-          SKIP_EXTS = {'.yml', '.yaml', '.png', '.jpg', '.git', '.py', '.sh', '.exe', '.md'}
-          STATUS_PREFIX = "#subscription-status:"
-
-          def decode_base64_content(text: str) -> str:
-              text = text.strip()
-              if text.startswith(("vless://", "ss://", "trojan://")):
-                  return text
-              try:
-                  if len(text) % 4:
-                      text += '=' * (4 - len(text) % 4)
-                  return base64.b64decode(text).decode('utf-8')
-              except Exception:
-                  return text
-
-          def fetch_sub() -> str:
-              headers = {"User-Agent": "Happ/3.9.1", "X-HWID": os.environ["MY_HWID"]}
-              resp = requests.get(os.environ["SUB_URL"], headers=headers, timeout=30)
-              resp.raise_for_status()
-              if not resp.content:
-                  return ""
-              return decode_base64_content(resp.content.decode('utf-8'))
-
-          def remove_first_config(config_text: str) -> str:
-              lines = [line for line in config_text.splitlines() if line.strip()]
-              if len(lines) <= 1:
-                  return ""
-              return '\n'.join(lines[1:])
-
-          def split_header_body(lines: list[str]) -> tuple[list[str], list[str]]:
-              if not lines:
-                  return [], []
-              first_config_idx = len(lines)
-              for i, line in enumerate(lines):
-                  stripped = line.strip()
-                  if not stripped:
-                      continue
-                  if stripped.startswith("#"):
-                      continue
-                  first_config_idx = i
-                  break
-              return lines[:first_config_idx], lines[first_config_idx:]
-
-          def parse_status(header_lines: list[str]) -> str:
-              for line in header_lines:
-                  stripped = line.strip()
-                  if stripped.lower().startswith(STATUS_PREFIX):
-                      return stripped.split(":", 1)[1].strip().lower()
-              return "active"
-
           def main():
               try:
-                  new_configs = remove_first_config(fetch_sub())
-                  if not new_configs.strip():
+                  headers = {"User-Agent": "Happ/3.9.1", "X-HWID": os.environ["MY_HWID"]}
+                  r = requests.get(os.environ["SUB_URL"], headers=headers, timeout=30)
+                  if not r.ok:
                       return
+                  conf = r.text.strip()
+                  if not conf.startswith(("vless://", "ss://", "trojan://")):
+                      try:
+                          conf = base64.b64decode(conf + '=' * (-len(conf) % 4)).decode('utf-8')
+                      except:
+                          pass
+                  conf = conf.strip()
+              except:
+                  return
 
-                  for root, dirs, files in os.walk('.'):
-                      dirs[:] = [d for d in dirs if d not in {'.git', '.github'}]
-                      for file in files:
-                          if file in SKIP_FILES or any(file.endswith(ext) for ext in SKIP_EXTS):
-                              continue
-
-                          full_path = os.path.join(root, file)
-                          try:
-                              with open(full_path, 'r', encoding='utf-8') as f:
-                                  original = f.read()
-                              lines = original.splitlines()
-                              header, _ = split_header_body(lines)
-                              if not header:
+              for root, dirs, files in os.walk('.'):
+                  dirs[:] = [d for d in dirs if d not in {'.git', '.github'}]
+                  for file in files:
+                      try:
+                          path = os.path.join(root, file)
+                          with open(path, 'r', encoding='utf-8') as f:
+                              lines = f.read().splitlines()
+                          
+                          cut = 0
+                          active = False
+                          for i, line in enumerate(lines):
+                              s = line.strip()
+                              if not s:
                                   continue
-
-                              status = parse_status(header)
-                              if status != "active":
-                                  continue
-
-                              new_content = '\n'.join(header).rstrip('\n') + '\n' + new_configs.rstrip('\n') + '\n'
-                              if original != new_content:
-                                  with open(full_path, 'w', encoding='utf-8') as f:
-                                      f.write(new_content)
-                          except Exception:
-                              pass
-              except Exception:
-                  pass
+                              if not s.startswith('#'):
+                                  break
+                              if "#subscription-status: active" in s.lower():
+                                  active = True
+                              cut = i + 1
+                          
+                          if active:
+                              header = '\n'.join(lines[:cut])
+                              new_text = (header + '\n' + conf + '\n') if header else (conf + '\n')
+                              with open(path, 'w', encoding='utf-8') as f:
+                                  f.write(new_text)
+                      except:
+                          pass
 
           if __name__ == "__main__":
               main()
