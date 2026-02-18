@@ -1,0 +1,8 @@
+#profile-update-interval: 1
+#profile-title: OK Vpn
+#support-url: https://t.me/FlexVerified
+#profile-web-page-url: https://t.me/FlexVerified
+#announce: VPN access for 350 RUB/month | ID: 7497345483
+#device-limit: 3
+#subscription-status: active
+vless://e4286250-90f4-4a0f-8ba8-3876f35bc868@example.com:8443?security=reality&type=tcp&flow=xtls-rprx-vision&sni=example.com&fp=random&pbk=REPLACE_ME&sid=REPLACE_ME#Main
