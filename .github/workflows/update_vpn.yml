@@ -50,14 +50,18 @@ jobs:
                   if not r.ok:
                       return
                   conf = r.text.strip()
-                  if not conf.startswith(("vless://", "ss://", "trojan://")):
+                  if not conf.startswith(("vless://", "ss://", "trojan://", "vmess://")):
                       try:
                           conf = base64.b64decode(conf + '=' * (-len(conf) % 4)).decode('utf-8')
                       except:
                           pass
                   
-                  filtered_lines = [line for line in conf.splitlines() if not line.lstrip().startswith('#')]
-                  conf = '\n'.join(filtered_lines).strip()
+                  # Оставляем всё (включая "--- 🇩🇪 Германия ---"), кроме строк с решеткой от провайдера
+                  cleaned_conf = []
+                  for line in conf.splitlines():
+                      if not line.lstrip().startswith('#'):
+                          cleaned_conf.append(line)
+                  conf = '\n'.join(cleaned_conf).strip()
               except:
                   return
 
@@ -69,21 +73,28 @@ jobs:
                           with open(path, 'r', encoding='utf-8') as f:
                               lines = f.read().splitlines()
                           
-                          cut = 0
+                          header_lines = []
                           active = False
-                          for i, line in enumerate(lines):
+                          for line in lines:
                               s = line.strip()
                               if not s:
                                   continue
                               if not s.startswith('#'):
                                   break
+                              
+                              header_lines.append(line)
+                              
                               if "#subscription-status: active" in s.lower():
                                   active = True
-                              cut = i + 1
+                                  
+                              # Обрываем чтение заголовка ровно после твоей строки announce, 
+                              # чтобы отсечь весь старый мусор в файлах
+                              if s.lower().startswith("#announce"):
+                                  break
                           
                           if active:
-                              header = '\n'.join(lines[:cut])
-                              new_text = (header + '\n' + conf + '\n') if header else (conf + '\n')
+                              header = '\n'.join(header_lines)
+                              new_text = (header + '\n\n' + conf + '\n') if header else (conf + '\n')
                               with open(path, 'w', encoding='utf-8') as f:
                                   f.write(new_text)
                       except:
