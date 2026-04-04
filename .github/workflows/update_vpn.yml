@@ -55,7 +55,9 @@ jobs:
                           conf = base64.b64decode(conf + '=' * (-len(conf) % 4)).decode('utf-8')
                       except:
                           pass
-                  conf = conf.strip()
+                  
+                  filtered_lines = [line for line in conf.splitlines() if not line.lstrip().startswith('#')]
+                  conf = '\n'.join(filtered_lines).strip()
               except:
                   return
 
