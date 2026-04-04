@@ -5,13 +5,7 @@
 #support-url: https://t.me/FlexVerified
 #profile-web-page-url: https://t.me/FlexVerified
 #announce: ↖️ Обход глушилок ВСЕХ операторов всего за 300₽/мес ↗️
-#profile-title: base64:SGF0VlBOIOKAoiBQUk8=
-#profile-update-interval: 24
-#subscription-always-hwid-enable: 1
-#profile-web-page-url: https://vpn.aprux.ru/c/s-Lt4seUPn
-#support-url: https://t.me/Hat_VPN_bot
-#subscription-userinfo: upload=0; download=0; total=0; expire=1776519229
-# --- 🇩🇪 Германия ---
+
 vless://5f4196c6-8978-4428-bff3-264e1b8d3982@ger.aprux.ru:443?type=tcp&encryption=none&security=reality&fp=firefox&sni=google.com&spx=%2F&flow=xtls-rprx-vision&pbk=ODSPhnao4-aA-zuVxlFE2Q2bVtOvKCgDyWTPgI-6cnk&sid=4205ff7e#%F0%9F%87%A9%F0%9F%87%AA%20%D0%93%D0%B5%D1%80%D0%BC%D0%B0%D0%BD%D0%B8%D1%8F
 vless://e75f45a1-625e-4405-88c6-26dae825ffd9@fin.aprux.ru:8443?type=tcp&encryption=none&security=reality&fp=firefox&sni=google.com&spx=%2F&flow=xtls-rprx-vision&pbk=qh09oMH5d3OWilniu8_8hC42ZPr8hvdUrOK6xq-QWWg&sid=b670#%F0%9F%87%AB%F0%9F%87%AE%20%D0%A4%D0%B8%D0%BD%D0%BB%D1%8F%D0%BD%D0%B4%D0%B8%D1%8F
 vless://bb9b32ab-126f-4e07-bfc4-5d0f83b16880@youtube.aprux.ru:443?type=tcp&encryption=none&security=reality&fp=chrome&sni=www.google.com&spx=%2F&flow=xtls-rprx-vision&pbk=VL4reDUTquTCfuINQQl0moaTTgzcJCAL-x70RDy1qy4&sid=66cdf2#%F0%9F%87%B7%F0%9F%87%BA%20YouTube
