@@ -36,7 +36,7 @@ jobs:
       - name: Run Script
         shell: python
         env:
-          MY_HWID: "467c01e84d78a648"
+          MY_HWID: "f7efb46eee0b11c5"
           SUB_URL: ${{ secrets.VPN_SUB_URL }}
         run: |
           import os
