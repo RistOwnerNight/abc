@@ -187,6 +187,10 @@ jobs:
               for root, dirs, files in os.walk('.'):
                   dirs[:] = [d for d in dirs if d not in {'.git', '.github'}]
                   for file in files:
+                      # ИСКЛЮЧЕНИЕ ДЛЯ ФАЙЛА e
+                      if file == 'e':
+                          continue
+                          
                       try:
                           path = os.path.join(root, file)
                           with open(path, 'r', encoding='utf-8') as f:
