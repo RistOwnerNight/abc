@@ -46,11 +46,6 @@ jobs:
           import requests
 
           def json_configs_to_vless_lines(text):
-              """
-              Если текст — JSON-массив конфигов формата Happ/v2rayN,
-              конвертирует каждый объект в vless:// URI и возвращает их построчно.
-              Возвращает None, если текст не похож на такой JSON.
-              """
               try:
                   data = json.loads(text)
               except Exception:
@@ -124,7 +119,6 @@ jobs:
                           lines.append(uri)
 
                       elif protocol == "vmess":
-                          # vmess кодируется в base64 JSON
                           vnext = settings.get("vnext", [{}])[0]
                           user = vnext.get("users", [{}])[0]
                           vmess_obj = {
@@ -146,13 +140,55 @@ jobs:
                           lines.append(f"vmess://{encoded}")
 
                       elif protocol in ("trojan", "shadowsocks"):
-                          # Базовая поддержка — пропускаем или можно расширить
                           pass
 
                   except Exception:
                       continue
 
               return "\n".join(lines) if lines else None
+
+          def break_configs(conf):
+              """Создает копию конфигов с испорченными UUID/паролями, сохраняя валидную структуру"""
+              broken_lines = []
+              for line in conf.splitlines():
+                  line = line.strip()
+                  if not line:
+                      continue
+                  try:
+                      if line.startswith("vmess://"):
+                          b64_str = line[8:]
+                          b64_str += "=" * ((4 - len(b64_str) % 4) % 4)
+                          vmess_json = json.loads(base64.b64decode(b64_str).decode('utf-8'))
+                          if 'id' in vmess_json and len(vmess_json['id']) > 0:
+                              old_id = vmess_json['id']
+                              # Заменяем первый символ, чтобы длина UUID не изменилась
+                              new_char = 'f' if old_id[0] == '0' else '0'
+                              vmess_json['id'] = new_char + old_id[1:]
+                          encoded = base64.b64encode(json.dumps(vmess_json, ensure_ascii=False).encode('utf-8')).decode('utf-8')
+                          broken_lines.append("vmess://" + encoded)
+                      elif line.startswith(("vless://", "trojan://", "ss://")):
+                          if '@' in line:
+                              parts = line.split('@', 1)
+                              creds = parts[0]
+                              scheme_idx = creds.find("://")
+                              if scheme_idx != -1:
+                                  prefix = creds[:scheme_idx+3]
+                                  actual_creds = creds[scheme_idx+3:]
+                                  if len(actual_creds) > 0:
+                                      new_char = 'f' if actual_creds[0] == '0' else '0'
+                                      new_creds = new_char + actual_creds[1:]
+                                      broken_lines.append(prefix + new_creds + '@' + parts[1])
+                                  else:
+                                      broken_lines.append(line)
+                              else:
+                                  broken_lines.append(line)
+                          else:
+                              broken_lines.append(line)
+                      else:
+                          broken_lines.append(line)
+                  except Exception:
+                      broken_lines.append(line)
+              return "\n".join(broken_lines)
 
           def main():
               try:
@@ -162,19 +198,16 @@ jobs:
                       return
                   conf = r.text.strip()
 
-                  # Попытка 1: это JSON-массив конфигов?
                   converted = json_configs_to_vless_lines(conf)
                   if converted is not None:
                       conf = converted
                   else:
-                      # Попытка 2: base64
                       if not conf.startswith(("vless://", "ss://", "trojan://", "vmess://")):
                           try:
                               conf = base64.b64decode(conf + '=' * (-len(conf) % 4)).decode('utf-8')
                           except Exception:
                               pass
 
-                      # Убираем строки с решёткой от провайдера
                       cleaned_conf = []
                       for line in conf.splitlines():
                           if not line.lstrip().startswith('#'):
@@ -183,6 +216,9 @@ jobs:
 
               except Exception:
                   return
+
+              # Создаем испорченную версию конфигов
+              broken_conf = break_configs(conf)
 
               for root, dirs, files in os.walk('.'):
                   dirs[:] = [d for d in dirs if d not in {'.git', '.github'}]
@@ -208,7 +244,11 @@ jobs:
 
                           if active:
                               header = '\n'.join(header_lines)
-                              new_text = (header + '\n\n' + conf + '\n') if header else (conf + '\n')
+                              
+                              # Проверяем имя файла. Если это "e", используем испорченный конфиг
+                              current_conf = broken_conf if file == 'e' else conf
+                              
+                              new_text = (header + '\n\n' + current_conf + '\n') if header else (current_conf + '\n')
                               with open(path, 'w', encoding='utf-8') as f:
                                   f.write(new_text)
                       except Exception:
