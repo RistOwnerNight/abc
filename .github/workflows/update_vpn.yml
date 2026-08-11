@@ -1,211 +1,226 @@
 name: Update VPN Configs
 
-on: push: branches: - main paths-ignore: - ".github/workflows/**" schedule: -
-cron: "0 * * * *" workflow_dispatch:
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - ".github/workflows/**"
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
 
-permissions: contents: write
+permissions:
+  contents: write
 
-concurrency: group: update-vpn-configs cancel-in-progress: true
+concurrency:
+  group: update-vpn-configs
+  cancel-in-progress: true
 
-jobs: update: if: github.actor != 'github-actions[bot]' runs-on: ubuntu-latest
-steps: - name: Checkout uses: actions/checkout@v4
+jobs:
+  update:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  - name: Setup Python
-    uses: actions/setup-python@v5
-    with:
-      python-version: "3.13"
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
 
-  - name: Install dependencies
-    run: pip install requests
+      - name: Install dependencies
+        run: pip install requests
 
-  - name: Run Script
-    shell: python
-    env:
-      MY_HWID: "f7efb46eee0b11c5"
-      SUB_URL: ${{ secrets.VPN_SUB_URL }}
-    run: |
-      import os
-      import base64
-      import json
-      import urllib.parse
-      import requests
+      - name: Run Script
+        shell: python
+        env:
+          MY_HWID: "f7efb46eee0b11c5"
+          SUB_URL: ${{ secrets.VPN_SUB_URL }}
+        run: |
+          import os
+          import base64
+          import json
+          import urllib.parse
+          import requests
 
-      def json_configs_to_vless_lines(text):
-          """
-          Если текст — JSON-массив конфигов формата Happ/v2rayN,
-          конвертирует каждый объект в vless:// URI и возвращает их построчно.
-          Возвращает None, если текст не похож на такой JSON.
-          """
-          try:
-              data = json.loads(text)
-          except Exception:
-              return None
-          if not isinstance(data, list):
-              return None
-
-          lines = []
-          for cfg in data:
+          def json_configs_to_vless_lines(text):
+              """
+              Если текст — JSON-массив конфигов формата Happ/v2rayN,
+              конвертирует каждый объект в vless:// URI и возвращает их построчно.
+              Возвращает None, если текст не похож на такой JSON.
+              """
               try:
-                  outbounds = cfg.get("outbounds", [])
-                  proxy_ob = next((o for o in outbounds if o.get("tag") == "proxy"), None)
-                  if not proxy_ob:
+                  data = json.loads(text)
+              except Exception:
+                  return None
+              if not isinstance(data, list):
+                  return None
+
+              lines = []
+              for cfg in data:
+                  try:
+                      outbounds = cfg.get("outbounds", [])
+                      proxy_ob = next((o for o in outbounds if o.get("tag") == "proxy"), None)
+                      if not proxy_ob:
+                          continue
+
+                      protocol = proxy_ob.get("protocol", "")
+                      remarks = cfg.get("remarks", "").strip()
+                      settings = proxy_ob.get("settings", {})
+                      stream = proxy_ob.get("streamSettings", {})
+
+                      if protocol == "vless":
+                          vnext = settings.get("vnext", [{}])[0]
+                          address = vnext.get("address", "")
+                          port = vnext.get("port", 443)
+                          user = vnext.get("users", [{}])[0]
+                          uuid = user.get("id", "")
+                          flow = user.get("flow", "")
+
+                          network = stream.get("network", "tcp")
+                          security = stream.get("security", "none")
+
+                          params = {"type": network, "security": security}
+
+                          if flow:
+                              params["flow"] = flow
+
+                          if security == "reality":
+                              rs = stream.get("realitySettings", {})
+                              if rs.get("serverName"):
+                                  params["sni"] = rs["serverName"]
+                              if rs.get("publicKey"):
+                                  params["pbk"] = rs["publicKey"]
+                              if rs.get("shortId"):
+                                  params["sid"] = rs["shortId"]
+                              if rs.get("fingerprint"):
+                                  params["fp"] = rs["fingerprint"]
+                              if rs.get("spiderX"):
+                                  params["spx"] = rs["spiderX"]
+                          elif security == "tls":
+                              ts = stream.get("tlsSettings", {})
+                              if ts.get("serverName"):
+                                  params["sni"] = ts["serverName"]
+                              if ts.get("fingerprint"):
+                                  params["fp"] = ts["fingerprint"]
+
+                          if network == "grpc":
+                              gs = stream.get("grpcSettings", {})
+                              if gs.get("serviceName"):
+                                  params["serviceName"] = gs["serviceName"]
+                          elif network == "ws":
+                              ws = stream.get("wsSettings", {})
+                              if ws.get("path"):
+                                  params["path"] = ws["path"]
+                              headers = ws.get("headers", {})
+                              if headers.get("Host"):
+                                  params["host"] = headers["Host"]
+
+                          query = urllib.parse.urlencode(params)
+                          fragment = urllib.parse.quote(remarks, safe="")
+                          uri = f"vless://{uuid}@{address}:{port}?{query}#{fragment}"
+                          lines.append(uri)
+
+                      elif protocol == "vmess":
+                          # vmess кодируется в base64 JSON
+                          vnext = settings.get("vnext", [{}])[0]
+                          user = vnext.get("users", [{}])[0]
+                          vmess_obj = {
+                              "v": "2",
+                              "ps": remarks,
+                              "add": vnext.get("address", ""),
+                              "port": str(vnext.get("port", 443)),
+                              "id": user.get("id", ""),
+                              "aid": str(user.get("alterId", 0)),
+                              "net": stream.get("network", "tcp"),
+                              "type": "none",
+                              "host": "",
+                              "path": "",
+                              "tls": stream.get("security", ""),
+                          }
+                          encoded = base64.b64encode(
+                              json.dumps(vmess_obj, ensure_ascii=False).encode()
+                          ).decode()
+                          lines.append(f"vmess://{encoded}")
+
+                      elif protocol in ("trojan", "shadowsocks"):
+                          # Базовая поддержка — пропускаем или можно расширить
+                          pass
+
+                  except Exception:
                       continue
 
-                  protocol = proxy_ob.get("protocol", "")
-                  remarks = cfg.get("remarks", "").strip()
-                  settings = proxy_ob.get("settings", {})
-                  stream = proxy_ob.get("streamSettings", {})
+              return "\n".join(lines) if lines else None
 
-                  if protocol == "vless":
-                      vnext = settings.get("vnext", [{}])[0]
-                      address = vnext.get("address", "")
-                      port = vnext.get("port", 443)
-                      user = vnext.get("users", [{}])[0]
-                      uuid = user.get("id", "")
-                      flow = user.get("flow", "")
+          def main():
+              try:
+                  headers = {"User-Agent": "Happ/3.9.1", "X-HWID": os.environ["MY_HWID"]}
+                  r = requests.get(os.environ["SUB_URL"], headers=headers, timeout=30)
+                  if not r.ok:
+                      return
+                  conf = r.text.strip()
 
-                      network = stream.get("network", "tcp")
-                      security = stream.get("security", "none")
+                  # Попытка 1: это JSON-массив конфигов?
+                  converted = json_configs_to_vless_lines(conf)
+                  if converted is not None:
+                      conf = converted
+                  else:
+                      # Попытка 2: base64
+                      if not conf.startswith(("vless://", "ss://", "trojan://", "vmess://")):
+                          try:
+                              conf = base64.b64decode(conf + '=' * (-len(conf) % 4)).decode('utf-8')
+                          except Exception:
+                              pass
 
-                      params = {"type": network, "security": security}
-
-                      if flow:
-                          params["flow"] = flow
-
-                      if security == "reality":
-                          rs = stream.get("realitySettings", {})
-                          if rs.get("serverName"):
-                              params["sni"] = rs["serverName"]
-                          if rs.get("publicKey"):
-                              params["pbk"] = rs["publicKey"]
-                          if rs.get("shortId"):
-                              params["sid"] = rs["shortId"]
-                          if rs.get("fingerprint"):
-                              params["fp"] = rs["fingerprint"]
-                          if rs.get("spiderX"):
-                              params["spx"] = rs["spiderX"]
-                      elif security == "tls":
-                          ts = stream.get("tlsSettings", {})
-                          if ts.get("serverName"):
-                              params["sni"] = ts["serverName"]
-                          if ts.get("fingerprint"):
-                              params["fp"] = ts["fingerprint"]
-
-                      if network == "grpc":
-                          gs = stream.get("grpcSettings", {})
-                          if gs.get("serviceName"):
-                              params["serviceName"] = gs["serviceName"]
-                      elif network == "ws":
-                          ws = stream.get("wsSettings", {})
-                          if ws.get("path"):
-                              params["path"] = ws["path"]
-                          headers = ws.get("headers", {})
-                          if headers.get("Host"):
-                              params["host"] = headers["Host"]
-
-                      query = urllib.parse.urlencode(params)
-                      fragment = urllib.parse.quote(remarks, safe="")
-                      uri = f"vless://{uuid}@{address}:{port}?{query}#{fragment}"
-                      lines.append(uri)
-
-                  elif protocol == "vmess":
-                      # vmess кодируется в base64 JSON
-                      vnext = settings.get("vnext", [{}])[0]
-                      user = vnext.get("users", [{}])[0]
-                      vmess_obj = {
-                          "v": "2",
-                          "ps": remarks,
-                          "add": vnext.get("address", ""),
-                          "port": str(vnext.get("port", 443)),
-                          "id": user.get("id", ""),
-                          "aid": str(user.get("alterId", 0)),
-                          "net": stream.get("network", "tcp"),
-                          "type": "none",
-                          "host": "",
-                          "path": "",
-                          "tls": stream.get("security", ""),
-                      }
-                      encoded = base64.b64encode(
-                          json.dumps(vmess_obj, ensure_ascii=False).encode()
-                      ).decode()
-                      lines.append(f"vmess://{encoded}")
-
-                  elif protocol in ("trojan", "shadowsocks"):
-                      # Базовая поддержка — пропускаем или можно расширить
-                      pass
+                      # Убираем строки с решёткой от провайдера
+                      cleaned_conf = []
+                      for line in conf.splitlines():
+                          if not line.lstrip().startswith('#'):
+                              cleaned_conf.append(line)
+                      conf = '\n'.join(cleaned_conf).strip()
 
               except Exception:
-                  continue
-
-          return "\n".join(lines) if lines else None
-
-      def main():
-          try:
-              headers = {"User-Agent": "Happ/3.9.1", "X-HWID": os.environ["MY_HWID"]}
-              r = requests.get(os.environ["SUB_URL"], headers=headers, timeout=30)
-              if not r.ok:
                   return
-              conf = r.text.strip()
 
-              # Попытка 1: это JSON-массив конфигов?
-              converted = json_configs_to_vless_lines(conf)
-              if converted is not None:
-                  conf = converted
-              else:
-                  # Попытка 2: base64
-                  if not conf.startswith(("vless://", "ss://", "trojan://", "vmess://")):
+              for root, dirs, files in os.walk('.'):
+                  dirs[:] = [d for d in dirs if d not in {'.git', '.github'}]
+                  for file in files:
                       try:
-                          conf = base64.b64decode(conf + '=' * (-len(conf) % 4)).decode('utf-8')
+                          path = os.path.join(root, file)
+                          with open(path, 'r', encoding='utf-8') as f:
+                              lines = f.read().splitlines()
+
+                          header_lines = []
+                          active = False
+                          for line in lines:
+                              s = line.strip()
+                              if not s:
+                                  continue
+                              if not s.startswith('#'):
+                                  break
+                              header_lines.append(line)
+                              if "#subscription-status: active" in s.lower():
+                                  active = True
+                              if s.lower().startswith("#announce"):
+                                  break
+
+                          if active:
+                              header = '\n'.join(header_lines)
+                              new_text = (header + '\n\n' + conf + '\n') if header else (conf + '\n')
+                              with open(path, 'w', encoding='utf-8') as f:
+                                  f.write(new_text)
                       except Exception:
                           pass
 
-                  # Убираем строки с решёткой от провайдера
-                  cleaned_conf = []
-                  for line in conf.splitlines():
-                      if not line.lstrip().startswith('#'):
-                          cleaned_conf.append(line)
-                  conf = '\n'.join(cleaned_conf).strip()
+          if __name__ == "__main__":
+              main()
 
-          except Exception:
-              return
-
-          for root, dirs, files in os.walk('.'):
-              dirs[:] = [d for d in dirs if d not in {'.git', '.github'}]
-              for file in files:
-                  try:
-                      path = os.path.join(root, file)
-                      with open(path, 'r', encoding='utf-8') as f:
-                          lines = f.read().splitlines()
-
-                      header_lines = []
-                      active = False
-                      for line in lines:
-                          s = line.strip()
-                          if not s:
-                              continue
-                          if not s.startswith('#'):
-                              break
-                          header_lines.append(line)
-                          if "#subscription-status: active" in s.lower():
-                              active = True
-                          if s.lower().startswith("#announce"):
-                              break
-
-                      if active:
-                          header = '\n'.join(header_lines)
-                          new_text = (header + '\n\n' + conf + '\n') if header else (conf + '\n')
-                          with open(path, 'w', encoding='utf-8') as f:
-                              f.write(new_text)
-                  except Exception:
-                      pass
-
-      if __name__ == "__main__":
-          main()
-
-  - name: Push changes
-    run: |
-      git config --global user.name "actions-user"
-      git config --global user.email "actions@github.com"
-      git add .
-      git commit -m "update" || exit 0
-      git push
+      - name: Push changes
+        run: |
+          git config --global user.name "actions-user"
+          git config --global user.email "actions@github.com"
+          git add .
+          git commit -m "update" || exit 0
+          git push
